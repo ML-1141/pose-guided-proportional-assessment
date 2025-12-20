@@ -1,11 +1,6 @@
 from __future__ import annotations
 
 """
-pip install opencv-python
-pip install grad-cam
-pip install git+https://github.com/jacobgil/pytorch-grad-cam.git
-Change root_dir, save_path, WANDB_API_KEY, ckpt_path, and out_root
-
 This script runs end-to-end training and then Grad-CAM inference.
 
 Required CLI arguments:
@@ -70,7 +65,7 @@ def train_step(
     optimizer.step()
     return float(loss.item())
 
-def _init_wandb(batch_size: int, lr: float, num_epochs: int, margin: float, feature_dim: int):
+def _init_wandb(batch_size: int, lr: float, num_epochs: int, margin: float, feature_dim: int, use_stn: bool):
     """Best-effort wandb init. If unavailable/misconfigured, training still runs."""
     try:
         import wandb  # type: ignore
@@ -118,11 +113,6 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train Siamese STN-AMCNN then run Grad-CAM inference.")
     parser.add_argument("root_dir", type=str, help="Dataset root directory")
     parser.add_argument("save_path", type=str, help="Path to save trained checkpoint (state_dict)")
-    parser.add_argument(
-        "ckpt_path",
-        type=str,
-        help="Checkpoint path for inference. If it does not exist, save_path will be used.",
-    )
     parser.add_argument("out_root", type=str, help="Directory to write inference outputs")
     parser.add_argument("--use_stn", type=_str2bool, default=True, help="Enable STN module (true/false). Default: true")
     return parser.parse_args()
@@ -270,18 +260,33 @@ def main() -> None:
 
         return total_loss / n
 
-    for epoch in range(1, num_epochs + 1):
-        train_loss = run_epoch(train_loader, train=True)
-        val_loss = run_epoch(val_loader, train=False)
-        #  log to wandb here
-        if wandb is not None:
-            wandb.log({
-                "epoch": epoch,
-                "train_loss": train_loss,
-                "val_loss": val_loss,
-            })
-        print(f"Epoch {epoch:02d} | Train: {train_loss:.4f} | Val: {val_loss:.4f}")
+    save_dir = os.path.dirname(save_path)
+    if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
 
+    try:
+        for epoch in range(1, num_epochs + 1):
+            train_loss = run_epoch(train_loader, train=True)
+            val_loss = run_epoch(val_loader, train=False)
+
+            if wandb is not None:
+                wandb.log(
+                    {
+                        "epoch": epoch,
+                        "train_loss": train_loss,
+                        "val_loss": val_loss,
+                    }
+                )
+
+            print(f"Epoch {epoch:02d} | Train: {train_loss:.4f} | Val: {val_loss:.4f}")
+
+    except KeyboardInterrupt:
+        # --------------------SAVE CHECKPOINT ON INTERRUPT--------------------
+        torch.save(model.state_dict(), save_path)
+        print("\n[INFO] KeyboardInterrupt detected. Saved current model state at:", save_path)
+
+    torch.save(model.state_dict(), save_path)
+    print("✔ Saved current model state at:", save_path)
 
     # --------------------SAVE MODEL--------------------
 
