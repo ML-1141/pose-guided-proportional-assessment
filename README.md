@@ -1,6 +1,14 @@
 
 # Pose-Guided Proportional Structure Assessment for 2D Illustrated Characters
 
+## Demo
+
+Low score proportion in the heatmap indicates the distorted part.
+
+<p>
+  <img width="650" src="https://github.com/user-attachments/assets/4b1343d8-8470-46d3-90ae-cb0278d95105" />
+</p>
+
 
 ## Requirements
 
